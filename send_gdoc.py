@@ -32,6 +32,10 @@ def read_config(config_file):
     with open(config_file) as json_data:
         config_data = json.load(json_data)
         json_data.close()
+    with open('mail_creds.dat') as json_data:
+        creds = json.load(json_data)
+        json_data.close()
+    config_data.update(creds)
     return config_data
 
 def send_email(content, config):
@@ -80,8 +84,8 @@ def main(argv):
             config_file = arg
 
     flags = tools.argparser.parse_args(args=[])
-    CLIENT_SECRET_FILE = 'client_secrets2.json'
-    OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive'
+    CLIENT_SECRET_FILE = 'client_secrets2.dat'
+    OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 
     config_data = read_config(config_file)
     fileid = config_data['fileid']
