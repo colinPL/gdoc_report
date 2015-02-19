@@ -27,8 +27,8 @@ def update_pooler_stats(content):
 
     try:
       new_content = content 
-      new_content = re.sub("Total VMs cloned: \d+", 'Total VMs cloned: ' + str(poolerstats['numclones']), new_content)
-      new_content = re.sub("Average clone time \(sec\): \d+\.\d+", 'Average clone time (sec): ' + str(poolerstats['clonetime']), new_content)
+      new_content = re.sub("Total VMs cloned: POOLER_CLONES", 'Total VMs cloned: ' + str(poolerstats['numclones']), new_content)
+      new_content = re.sub("Average clone time \(sec\): POOLER_TIMES", 'Average clone time (sec): ' + str(poolerstats['clonetime']), new_content)
       return new_content
     except:
       return content
