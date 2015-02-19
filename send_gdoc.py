@@ -1,7 +1,9 @@
 #!/opt/local/bin/python
 
+import re
 import sys
 import json
+import redis
 import getopt
 import smtplib
 import httplib2
@@ -14,6 +16,22 @@ from apiclient.discovery import build
 from oauth2client import tools
 from oauth2client.file import Storage
 from oauth2client.client import flow_from_clientsecrets
+
+def update_pooler_stats(content):
+    today = datetime.date.today()
+    datedelta = datetime.timedelta(days=-1)
+    poolerstats = {}
+    r = redis.StrictRedis(host='redis.delivery.puppetlabs.net', port=6379, db=0)
+    poolerstats['numclones'] = r.hlen('vmpooler__clone__' + str(today + datedelta))
+    poolerstats['clonetime'] = reduce(lambda x, y: x+y, map(float, (r.hvals('vmpooler__clone__' + str(today + datedelta))))) / poolerstats['numclones']
+
+    try:
+      new_content = content 
+      new_content = re.sub("Total VMs cloned: \d+", 'Total VMs cloned: ' + str(poolerstats['numclones']), new_content)
+      new_content = re.sub("Average clone time \(sec\): \d+\.\d+", 'Average clone time (sec): ' + str(poolerstats['clonetime']), new_content)
+      return new_content
+    except:
+      return content
 
 def download_file(service, drive_file):
     download_url = drive_file['exportLinks']['text/html']
@@ -93,7 +111,7 @@ def main(argv):
     # Setup flow object for auth
     FLOW = flow_from_clientsecrets(CLIENT_SECRET_FILE, scope=OAUTH_SCOPE)
 
-    # Try to get save credentials
+    # Try to get saved credentials
     storage = Storage('drive.dat')
     credentials = storage.get()
 
@@ -108,6 +126,7 @@ def main(argv):
 
     drive_file = service.files().get(fileId=fileid).execute()
     content = download_file(service, drive_file)
+    content = update_pooler_stats(content)
     send_email(content, config_data)
 
 if __name__ == "__main__":
