@@ -1,4 +1,4 @@
-#!/opt/local/bin/python
+#!/usr/bin/env python
 
 import re
 import sys
@@ -17,6 +17,10 @@ from oauth2client import tools
 from oauth2client.file import Storage
 from oauth2client.client import flow_from_clientsecrets
 
+CLIENT_SECRET_FILE = 'client_secrets2.dat'
+OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.file'
+
+
 def update_pooler_stats(content):
     today = datetime.date.today()
     datedelta = datetime.timedelta(days=-1)
@@ -33,6 +37,7 @@ def update_pooler_stats(content):
     except:
       return content
 
+
 def download_file(service, drive_file):
     download_url = drive_file['exportLinks']['text/html']
     if download_url:
@@ -46,6 +51,7 @@ def download_file(service, drive_file):
       print "can't seem to find any data"
       return None
 
+
 def read_config(config_file):
     with open(config_file) as json_data:
         config_data = json.load(json_data)
@@ -55,6 +61,7 @@ def read_config(config_file):
         json_data.close()
     config_data.update(creds)
     return config_data
+
 
 def send_email(content, config):
     today = datetime.date.today()
@@ -102,9 +109,6 @@ def main(argv):
             config_file = arg
 
     flags = tools.argparser.parse_args(args=[])
-    CLIENT_SECRET_FILE = 'client_secrets2.dat'
-    OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.file'
-
     config_data = read_config(config_file)
     fileid = config_data['fileid']
 
