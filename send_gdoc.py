@@ -63,6 +63,24 @@ def read_config(config_file):
     return config_data
 
 
+def parse_args(argv):
+    if len(sys.argv) < 2:
+        print 'send_gdoc.py -c <configfile>'
+        sys.exit()
+    try:
+        opts, args = getopt.getopt(argv,"hc:",["cfg="])
+    except getopt.GetoptError:
+        print 'send_gdoc.py -c <configfile>'
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print 'send_gdoc.py -c <configfile>'
+            sys.exit()
+        elif opt in ("-c", "--cfg"):
+            config_file = arg
+    return config_file    
+
+
 def send_email(content, config):
     today = datetime.date.today()
     mail_user = config['user']
@@ -93,27 +111,13 @@ def send_email(content, config):
 
 ############### Main ####################
 def main(argv):
-    if len(sys.argv) < 2:
-        print 'send_gdoc.py -c <configfile>'
-        sys.exit()
-    try:
-        opts, args = getopt.getopt(argv,"hc:",["cfg="])
-    except getopt.GetoptError:
-        print 'send_gdoc.py -c <configfile>'
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h':
-            print 'send_gdoc.py -c <configfile>'
-            sys.exit()
-        elif opt in ("-c", "--cfg"):
-            config_file = arg
 
-    flags = tools.argparser.parse_args(args=[])
+    config_file = parse_args(argv)
     config_data = read_config(config_file)
     fileid = config_data['fileid']
 
     # Setup flow object for auth
-    FLOW = flow_from_clientsecrets(CLIENT_SECRET_FILE, scope=OAUTH_SCOPE)
+    flow = flow_from_clientsecrets(CLIENT_SECRET_FILE, scope=OAUTH_SCOPE)
 
     # Try to get saved credentials
     storage = Storage('drive.dat')
@@ -121,7 +125,7 @@ def main(argv):
 
     # If credentials is None, run through the client auth 
     if credentials is None:
-        credentials = tools.run_flow(FLOW, storage, flags)
+        credentials = tools.run_flow(flow, storage, flags)
     
     # Create an httplib2.Http object to handle our HTTP requests
     http = httplib2.Http()
