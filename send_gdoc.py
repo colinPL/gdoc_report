@@ -87,7 +87,7 @@ def send_email(content, config):
     mail_pass = config['pass']
     from_adr  = config['from']
     to_adr    = config['to']
-    subject   = config['subject'] + ' ' + today.isoformat()
+    subject   = today.isoformat() + ' ' + config['subject']
     
     message = MIMEMultipart('alternative')
     message['Subject'] = subject
