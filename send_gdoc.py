@@ -24,6 +24,7 @@ OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 def update_pooler_stats(content):
     today = datetime.date.today()
     datedelta = datetime.timedelta(days=-1)
+    date_str = (today + datedelta).strftime('%A, %b %d') # Thursday, Apr 09
     poolerstats = {}
     r = redis.StrictRedis(host='redis.delivery.puppetlabs.net', port=6379, db=0)
     poolerstats['numclones'] = r.hlen('vmpooler__clone__' + str(today + datedelta))
@@ -31,6 +32,7 @@ def update_pooler_stats(content):
 
     try:
       new_content = content 
+      new_content = re.sub('VMpooler Stats for DATE_STR', 'VMPooler Stats for ' + date_str, new_content)
       new_content = re.sub("24 hour summation of VMPooler cloned VMs: POOLER_CLONES", '24 hour summation of VMPooler cloned VMs: ' + str(poolerstats['numclones']), new_content)
       new_content = re.sub("Average clone time per VM \(sec\): POOLER_TIMES", 'Average clone time per VM (sec): ' + '%.3f' % poolerstats['clonetime'], new_content)
       return new_content
