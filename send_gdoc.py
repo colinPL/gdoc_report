@@ -3,7 +3,6 @@
 import re
 import sys
 import json
-import redis
 import getopt
 import smtplib
 import httplib2
@@ -24,15 +23,21 @@ OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 def update_pooler_stats(content):
     today = datetime.date.today()
     datedelta = datetime.timedelta(days=-1)
+    yesterday = str(today + datedelta)
     poolerstats = {}
-    r = redis.StrictRedis(host='redis.delivery.puppetlabs.net', port=6379, db=0)
-    poolerstats['numclones'] = r.hlen('vmpooler__clone__' + str(today + datedelta))
-    poolerstats['clonetime'] = reduce(lambda x, y: x+y, map(float, (r.hvals('vmpooler__clone__' + str(today + datedelta))))) / poolerstats['numclones']
+
+    http = httplib2.Http()
+    (headers, response) = http.request("http://vmpooler.delivery.puppetlabs.net/api/v1/summary?from=" + yesterday + "&to=" + yesterday)
+
+    response_json = json.loads(response)
+
+    poolerstats['numclones'] = response_json['daily'][0]['clone']['count']['total']
+    poolerstats['clonetime'] = response_json['daily'][0]['clone']['duration']['average']
 
     try:
-      new_content = content 
+      new_content = content
       new_content = re.sub("24 hour summation of VMPooler cloned VMs: POOLER_CLONES", '24 hour summation of VMPooler cloned VMs: ' + str(poolerstats['numclones']), new_content)
-      new_content = re.sub("Average clone time per VM \(sec\): POOLER_TIMES", 'Average clone time per VM (sec): ' + '%.3f' % poolerstats['clonetime'], new_content)
+      new_content = re.sub("Average clone time per VM \(sec\): POOLER_TIMES", 'Average clone time per VM (sec): ' + str(poolerstats['clonetime']), new_content)
       return new_content
     except:
       return content
