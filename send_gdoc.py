@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 
-import re
 import sys
 import json
 import getopt
-import smtplib
-import httplib2
-import argparse
+import base64
+
 import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
+import re
+import httplib2
 from apiclient import errors
 from apiclient.discovery import build
 from oauth2client import tools
@@ -17,7 +18,10 @@ from oauth2client.file import Storage
 from oauth2client.client import flow_from_clientsecrets
 
 CLIENT_SECRET_FILE = 'client_secrets2.dat'
-OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.file'
+OAUTH_SCOPE = [
+    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/gmail.compose'
+]
 
 
 def update_pooler_stats(content):
@@ -27,7 +31,8 @@ def update_pooler_stats(content):
     poolerstats = {}
 
     http = httplib2.Http()
-    (headers, response) = http.request("http://vmpooler.delivery.puppetlabs.net/api/v1/summary?from=" + yesterday + "&to=" + yesterday)
+    (headers, response) = http.request(
+        "http://vmpooler.delivery.puppetlabs.net/api/v1/summary?from=" + yesterday + "&to=" + yesterday)
 
     response_json = json.loads(response)
 
@@ -35,12 +40,14 @@ def update_pooler_stats(content):
     poolerstats['clonetime'] = response_json['daily'][0]['clone']['duration']['average']
 
     try:
-      new_content = content
-      new_content = re.sub("24 hour summation of VMPooler cloned VMs: POOLER_CLONES", '24 hour summation of VMPooler cloned VMs: ' + str(poolerstats['numclones']), new_content)
-      new_content = re.sub("Average clone time per VM \(sec\): POOLER_TIMES", 'Average clone time per VM (sec): ' + str(poolerstats['clonetime']), new_content)
-      return new_content
+        new_content = content
+        new_content = re.sub("24 hour summation of VMPooler cloned VMs: POOLER_CLONES",
+                             '24 hour summation of VMPooler cloned VMs: ' + str(poolerstats['numclones']), new_content)
+        new_content = re.sub("Average clone time per VM \(sec\): POOLER_TIMES",
+                             'Average clone time per VM (sec): ' + str(poolerstats['clonetime']), new_content)
+        return new_content
     except:
-      return content
+        return content
 
 
 def download_file(service, drive_file):
@@ -53,18 +60,14 @@ def download_file(service, drive_file):
             print 'An error occurred: %s' % resp
             return None
     else:
-      print "can't seem to find any data"
-      return None
+        print "can't seem to find any data"
+        return None
 
 
 def read_config(config_file):
     with open(config_file) as json_data:
         config_data = json.load(json_data)
         json_data.close()
-    with open('mail_creds.dat') as json_data:
-        creds = json.load(json_data)
-        json_data.close()
-    config_data.update(creds)
     return config_data
 
 
@@ -73,7 +76,7 @@ def parse_args(argv):
         print 'send_gdoc.py -c <configfile>'
         sys.exit()
     try:
-        opts, args = getopt.getopt(argv,"hc:",["cfg="])
+        opts, args = getopt.getopt(argv, "hc:", ["cfg="])
     except getopt.GetoptError:
         print 'send_gdoc.py -c <configfile>'
         sys.exit(2)
@@ -83,40 +86,37 @@ def parse_args(argv):
             sys.exit()
         elif opt in ("-c", "--cfg"):
             config_file = arg
-    return config_file    
+    return config_file
 
 
-def send_email(content, config):
+def send_email(service, content, config):
+    message = create_email(config, content)
+
+    try:
+        message = (service.users().messages().send(userId='me', body=message)
+                   .execute())
+        print 'Message Id: %s' % message['id']
+        return message
+    except errors.HttpError, error:
+        print 'An error occurred: %s' % error
+
+
+def create_email(config, content):
     today = datetime.date.today()
-    mail_user = config['user']
-    mail_pass = config['pass']
-    from_adr  = config['from']
-    to_adr    = config['to']
-    subject   = today.isoformat() + ' ' + config['subject']
-    
+    mail_user = config['from']
+    to_adr = config['to']
+    subject = today.isoformat() + ' ' + config['subject']
     message = MIMEMultipart('alternative')
     message['Subject'] = subject
     message['From'] = mail_user
     message['To'] = to_adr
     part1 = MIMEText(content, 'html')
     message.attach(part1)
-    
-    try:
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.ehlo()
-        server.starttls()
-        server.ehlo()
-        server.login(mail_user, mail_pass)
-        server.sendmail(from_adr, to_adr, message.as_string())
-        server.quit()
-        print 'successfully sent the mail'
-    except smtplib.SMTPAuthenticationError as e:
-       print "Unable to send message: %s" % e 
+    return {'raw': base64.urlsafe_b64encode(message.as_string())}
 
 
 ############### Main ####################
 def main(argv):
-
     config_file = parse_args(argv)
     config_data = read_config(config_file)
     fileid = config_data['fileid']
@@ -130,17 +130,21 @@ def main(argv):
 
     # If credentials is None, run through the client auth 
     if credentials is None:
-        credentials = tools.run_flow(flow, storage, flags)
-    
+        # credentials = tools.run_flow(flow, storage, flags)
+        credentials = tools.run(flow, storage)
+
     # Create an httplib2.Http object to handle our HTTP requests
     http = httplib2.Http()
     http = credentials.authorize(http)
-    service = build('drive', 'v2', http=http)
+    drive_service = build('drive', 'v2', http=http)
 
-    drive_file = service.files().get(fileId=fileid).execute()
-    content = download_file(service, drive_file)
+    drive_file = drive_service.files().get(fileId=fileid).execute()
+    content = download_file(drive_service, drive_file)
     content = update_pooler_stats(content)
-    send_email(content, config_data)
+
+    email_service = build('gmail', 'v1', http=http)
+    send_email(email_service, content, config_data)
+
 
 if __name__ == "__main__":
-   main(sys.argv[1:])
+    main(sys.argv[1:])
