@@ -24,6 +24,7 @@ def update_pooler_stats(content):
     today = datetime.date.today()
     datedelta = datetime.timedelta(days=-1)
     yesterday = str(today + datedelta)
+    yesterday_str = yesterday.strftime('%A, %b %d') # Thursday, Apr 09
     poolerstats = {}
 
     http = httplib2.Http()
@@ -36,7 +37,7 @@ def update_pooler_stats(content):
 
     try:
       new_content = content
-      new_content = re.sub("24 hour summation of VMPooler cloned VMs: POOLER_CLONES", '24 hour summation of VMPooler cloned VMs: ' + str(poolerstats['numclones']), new_content)
+      new_content = re.sub("24 hour summation of VMPooler cloned VMs: POOLER_CLONES", 'Number of VMPooler VMs cloned for ' + yesterday_str + ': ' + str(poolerstats['numclones']), new_content)
       new_content = re.sub("Average clone time per VM \(sec\): POOLER_TIMES", 'Average clone time per VM (sec): ' + str(poolerstats['clonetime']), new_content)
       return new_content
     except:
@@ -83,7 +84,7 @@ def parse_args(argv):
             sys.exit()
         elif opt in ("-c", "--cfg"):
             config_file = arg
-    return config_file    
+    return config_file
 
 
 def send_email(content, config):
@@ -93,14 +94,14 @@ def send_email(content, config):
     from_adr  = config['from']
     to_adr    = config['to']
     subject   = today.isoformat() + ' ' + config['subject']
-    
+
     message = MIMEMultipart('alternative')
     message['Subject'] = subject
     message['From'] = mail_user
     message['To'] = to_adr
     part1 = MIMEText(content, 'html')
     message.attach(part1)
-    
+
     try:
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.ehlo()
@@ -111,7 +112,7 @@ def send_email(content, config):
         server.quit()
         print 'successfully sent the mail'
     except smtplib.SMTPAuthenticationError as e:
-       print "Unable to send message: %s" % e 
+       print "Unable to send message: %s" % e
 
 
 ############### Main ####################
@@ -128,10 +129,10 @@ def main(argv):
     storage = Storage('drive.dat')
     credentials = storage.get()
 
-    # If credentials is None, run through the client auth 
+    # If credentials is None, run through the client auth
     if credentials is None:
         credentials = tools.run_flow(flow, storage, flags)
-    
+
     # Create an httplib2.Http object to handle our HTTP requests
     http = httplib2.Http()
     http = credentials.authorize(http)
